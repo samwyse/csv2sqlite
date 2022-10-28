@@ -1,6 +1,6 @@
 #! /usr/bin/env python
 
-"""Add documentation here."""
+"""Command line arguments to define CSV dialects."""
 
 # Insure maximum compatibility between Python 2 and 3
 from __future__ import absolute_import, division, print_function
