@@ -8,7 +8,6 @@
 
 from __future__ import print_function
 
-
 import sys
 import argparse
 import csv
@@ -23,7 +22,7 @@ else:
     read_mode = 'rU'
 
 
-def convert(filepath_or_fileobj, dbpath, table, headerspath_or_fileobj=None, compression=None, typespath_or_fileobj=None, delimiter=None):
+def convert(filepath_or_fileobj, dbpath, table, headerspath_or_fileobj=None, compression=None, typespath_or_fileobj=None, dialect=None):
     if isinstance(filepath_or_fileobj, string_types):
         if compression is None:
             fo = open(filepath_or_fileobj, mode=read_mode)
@@ -37,16 +36,13 @@ def convert(filepath_or_fileobj, dbpath, table, headerspath_or_fileobj=None, com
     else:
         fo = filepath_or_fileobj
 
-    try:
-        dialect = csv.Sniffer().sniff(fo.readline())
-    except TypeError:
-        dialect = csv.Sniffer().sniff(str(fo.readline()))
-    fo.seek(0)
+    if not dialect:
+        try:
+            dialect = csv.Sniffer().sniff(fo.readline())
+        except TypeError:
+            dialect = csv.Sniffer().sniff(str(fo.readline()))
+        fo.seek(0)
 
-    # override with user specified delimiter
-    if delimiter:
-        dialect.delimiter = str(delimiter)
-    
     # get the headers
     header_given = headerspath_or_fileobj is not None
     if header_given:
@@ -93,12 +89,12 @@ def convert(filepath_or_fileobj, dbpath, table, headerspath_or_fileobj=None, com
     c = conn.cursor()
 
     try:
-        create_query = 'CREATE TABLE %s (%s)' % (table, _columns)
+        create_query = 'CREATE TABLE "%s" (%s)' % (table, _columns)
         c.execute(create_query)
     except:
         pass
 
-    _insert_tmpl = 'INSERT INTO %s VALUES (%s)' % (table,
+    _insert_tmpl = 'INSERT INTO "%s" VALUES (%s)' % (table,
         ','.join(['?']*len(headers)))
 
     line = 0
@@ -186,6 +182,8 @@ def _guess_types(reader, number_of_columns, max_sample_size=100):
 
 
 if __name__ == '__main__':
+    from argparse_csv import add_csv_argments
+
     parser = argparse.ArgumentParser(description='''
 Convert a CSV file to a table in a SQLite database.
 The database is created if it does not yet exist.
@@ -195,11 +193,14 @@ The database is created if it does not yet exist.
     parser.add_argument('table_name', type=str, nargs='?', help='Name of table to write to in SQLite file', default='data')
     parser.add_argument('--headers', type=str, nargs='?', help='Headers are read from this file, if provided.', default=None)
     parser.add_argument('--types', type=list, nargs='?', help='Types are read from this file, if provided.', default=None)
-    parser.add_argument('--delimiter', type=str, nargs='?', help='Use this string as the delimiter, if provided.', default=None)
 
     group = parser.add_mutually_exclusive_group()
     group.add_argument('--bz2', help='Input csv file is compressed using bzip2.', action='store_true')
     group.add_argument('--gzip', help='Input csv file is compressed using gzip.', action='store_true')
+
+    dialect_builder = add_csv_argments(parser, title="CSV format",
+        description="Specify the details of the CSV file format.",
+        prefix=None)
 
     args = parser.parse_args()
 
@@ -209,4 +210,6 @@ The database is created if it does not yet exist.
     elif args.gzip:
         compression = 'gzip'
 
-    convert(args.csv_file, args.sqlite_db_file, args.table_name, args.headers, compression, args.types, args.delimiter)
+    dialect = dialect_builder(args)
+
+    convert(args.csv_file, args.sqlite_db_file, args.table_name, args.headers, compression, args.types, dialect)
