@@ -23,6 +23,7 @@ __all__ = ['add_csv_argments']
 import argparse, csv
 
 def singlechar(s):
+    """Argument must be a single character."""
     try:
         if len(s) == 1:
             return s
@@ -30,17 +31,16 @@ def singlechar(s):
         pass
     raise ValueError('must be a single character')
 
+# Allowed ways of quoting
 quoting_choices = {
-    'minimal': csv.QUOTE_MINIMAL,
-    'all': csv.QUOTE_ALL,
-    'nonnumeric': csv.QUOTE_NONNUMERIC,
-    'none': csv.QUOTE_NONE,
-    }
+    name[6:].lower(): getattr(csv, name)
+    for name in dir(csv) if name.startswith('QUOTE_')}
 
+# The various types of values in a Dialect
 is_bool = {'action': 'store_true'}
 is_char = {'type': singlechar, 'metavar': 'CHAR'}
 is_string = {'type': str, 'metavar': 'STR'}
-is_quoting = {'choices': quoting_choices, 'type': lambda s: quoting_choices[s]}
+is_quoting = {'choices': quoting_choices, 'type': quoting_choices.get}
 
 dialect_attributes = (
     ('delimiter', is_char),
