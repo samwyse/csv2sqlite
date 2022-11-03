@@ -39,57 +39,9 @@ __version__ = '0.9'
 __all__ = []
 
 # Python standard libraries
-import argparse, csv, sys
+import argparse, csv, os, sys
 
-# https://bugs.python.org/issue34188#msg323681
-class StoreMapping(argparse._StoreAction):
-    """
-    Argparse action that interprets the `choices` argument as a dict
-    mapping the user-specified choices values to the resulting option
-    values.
-    
-    >>> adict = {'rock': 4, 'paper': 5, 'scissors': 8}
-    >>> parser = argparse.ArgumentParser()
-    >>> parser.add_argument('--foo', action=StoreMapping, choices=adict)  # doctest: +ELLIPSIS
-    StoreMapping(option_strings=['--foo'], dest='foo', ...)
-    >>> parser.parse_args('--foo rock'.split())
-    Namespace(foo=4)
-    """
-    def __init__(self, *args, choices, **kwargs):
-        super().__init__(*args, choices=choices.keys(), **kwargs)
-        self.mapping = choices
-    def __call__(self, parser, namespace, value, option_string=None):
-        setattr(namespace, self.dest, self.mapping[value])
-
-class AppendMapping(StoreMapping):
-    """
-    >>> adict = {'rock': 4, 'paper': 5, 'scissors': 8}
-    >>> parser = argparse.ArgumentParser()
-    >>> parser.add_argument('--foo', action=AppendMapping, choices=adict)  # doctest: +ELLIPSIS
-    AppendMapping(option_strings=['--foo'], dest='foo', ...)
-    >>> parser.parse_args('--foo rock --foo scissors'.split())
-    Namespace(foo=[4, 8])
-    """
-    def __call__(self, parser, namespace, value, option_string=None):
-        items = getattr(namespace, self.dest, None)
-        items = argparse._copy_items(items)
-        items.append(self.mapping[value])
-        setattr(namespace, self.dest, items)
-
-class ExtendMapping(StoreMapping):
-    """
-    >>> adict = {'rock': 4, 'paper': 5, 'scissors': 8}
-    >>> parser = argparse.ArgumentParser()
-    >>> parser.add_argument('--foo', action=ExtendMapping, choices=adict, nargs='+')  # doctest: +ELLIPSIS
-    ExtendMapping(option_strings=['--foo'], dest='foo', nargs='+', ...)
-    >>> parser.parse_args(["--foo", "rock", "--foo", "paper", "scissors", "rock"])
-    Namespace(foo=[4, 5, 8, 4])
-    """
-    def __call__(self, parser, namespace, values, option_string=None):
-        items = getattr(namespace, self.dest, None)
-        items = argparse._copy_items(items)
-        items.extend(self.mapping[value] for value in values)
-        setattr(namespace, self.dest, items)
+from argparse_actions import StoreMapping
 
 def singlechar(s):
     """Validate that 's' is a single character."""
@@ -118,7 +70,7 @@ dialect_attributes = (
     ('escapechar', is_char),
     ('doublequote', is_bool),
     ('skipinitialspace', is_bool),
-    ('lineterminator', {'metavar': 'STR'}),
+    ('lineterminator', {'metavar': 'STR', 'default': os.linesep}),
     ('quoting', {'action': StoreMapping, 'choices': quoting_choices}),
     )
 
@@ -145,16 +97,14 @@ def add_csv_group(container, *args, **kwargs):
 
     def get_dialect(ns):
         """Build a CSV Dialect from an argparse Namespace"""
-        class dialect(csv.Dialect):
-            _name = "argparser_dialect"
-            lineterminator = '\r\n'
-            quoting = csv.QUOTE_NONE
+        class_name = attr_prefix + "argparse_csv"
+        class_defs = {'_name': class_name}
         for key, _ in dialect_attributes:
             attr_name = attr_prefix + key
             attr_value = getattr(ns, attr_name)
             if attr_value is not None:
-                setattr(dialect, key, attr_value)
-        return dialect
+                class_defs[key] = attr_value
+        return type(class_name, (csv.Dialect,), class_defs)
 
     group.get_dialect = get_dialect
     return group
@@ -166,5 +116,3 @@ del add_csv_group
 if __name__ == '__main__':
     import doctest
     doctest.testmod()
-
-
